@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tars-ui-azure"
+version = "0.2.0"
+description = "Interstellar TARS-inspired UI for macOS with Azure OpenAI chat, Azure Speech (voice), and pluggable face recognition (Azure/ Incoresoft)"
+readme = "README.md"
+requires-python = ">=3.9,<3.11"
+license = "MIT"
+authors = [{name = "You", email = "you@example.com"}]
+dependencies = [
+    "PySide6>=6.7",
+    "opencv-python>=4.9",
+    "numpy>=1.26",
+    "pillow>=10.2",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "openai",
+    "azure-cognitiveservices-speech>=1.37.0",
+    "azure-cognitiveservices-vision-face",
+    "msrest"
+
+]
+
+
+
+[project.scripts]
+tars-ui = "tars_ui.app:main"
