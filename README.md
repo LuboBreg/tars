@@ -28,12 +28,6 @@ AZURE_SPEECH_REGION=your-region
 # Face (default = Azure Face; set keys if used)
 AZURE_FACE_ENDPOINT=https://<region>.api.cognitive.microsoft.com
 AZURE_FACE_KEY=your-azure-face-key
-# Optional: Incoresoft (VEZHA)
-INCORESOFT_BASE_URL=https://your-incoresoft-host/api
-INCORESOFT_API_KEY=your-incoresoft-key
-
-# Choose face provider (azure|incoresoft)
-TARS_FACE_PROVIDER=azure
 ```
 
 ## Run
