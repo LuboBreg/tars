@@ -7,12 +7,12 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QLineEd
 from PySide6.QtGui import QFont, QImage, QPixmap, QColor, QPalette, QPainter, QPen, QBrush, QLinearGradient, QPolygon, QRadialGradient
 from PySide6.QtCore import Qt, QTimer, QRect, QPropertyAnimation, QEasingCurve, QPoint, QSize
 
-from .face_providers.base import FaceProvider, FaceResult
-from .face_providers.azure import AzureFaceProvider
-from .face_providers.incoresoft import IncoresoftFaceProvider
-from .chat.azure_openai_client import ChatClient
-from .voice.azure_speech import Speech
-from PySide6.QtGui import QFontDatabase
+from tars_ui.face_providers.base import FaceProvider, FaceResult
+from tars_ui.face_providers.azure import AzureFaceProvider
+from tars_ui.face_providers.incoresoft import IncoresoftFaceProvider
+from tars_ui.chat.azure_openai_client import ChatClient
+from tars_ui.voice.azure_speech import Speech
+
 
 # Deloitte Brand Colors
 DELOITTE_GREEN = QColor(134, 188, 37)      # #86BC25 - Deloitte signature green
@@ -27,30 +27,6 @@ def qimage_from_bgr(frame):
     bytes_per_line = ch * w
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     return QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-
-def debug_voice_system():
-    """Debug voice recognition system"""
-    print("=== VOICE SYSTEM DEBUG ===")
-    try:
-        import speech_recognition as sr
-        r = sr.Recognizer()
-        mic = sr.Microphone()
-        print(f"Available microphones: {sr.Microphone.list_microphone_names()}")
-        
-        print("Testing microphone for 3 seconds...")
-        with mic as source:
-            r.adjust_for_ambient_noise(source)
-            audio = r.listen(source, timeout=3)
-            print("Audio captured successfully")
-            
-        text = r.recognize_google(audio)
-        print(f"Recognized: '{text}'")
-        
-    except Exception as e:
-        print(f"Voice system error: {e}")
-    
-    print("=== END DEBUG ===")
-
 
 class BackgroundRemover:
     """High-quality face segmentation with distinct iPhone-style portrait effects"""
@@ -597,7 +573,7 @@ class ExecutiveButton(QPushButton):
         """)
 
 class AppleButton(QPushButton):
-    """Apple-style round button with flat icon and text below - no white backgrounds"""
+    """Apple-style round button with icon and text below"""
     def __init__(self, icon_text, label_text, parent=None):
         super().__init__(parent)
         self.setFixedSize(100, 120)  # Taller for icon + label
@@ -605,65 +581,52 @@ class AppleButton(QPushButton):
         # Create layout for icon and text
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)  # Increased spacing
+        layout.setSpacing(8)
         
-        # Icon button (circular) - completely transparent by default
+        # Icon button (circular)
         self.icon_btn = QPushButton(icon_text)
         self.icon_btn.setFixedSize(80, 80)
         self.icon_btn.setCheckable(True)
         
-        # Clean, minimal font - larger for better visibility
-        font = QFont("SF Pro Display", 32, QFont.Weight.Light)  # Increased size
+        font = QFont("Open Sans Light", 24, QFont.Weight.Light)
         self.icon_btn.setFont(font)
         
-        # Completely transparent button with subtle hover states
         self.icon_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
                 border: none;
                 border-radius: 40px;
-                color: rgba({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}, 180);
-            }}
-            QPushButton:hover {{
-                background-color: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 50);
                 color: rgba({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}, 255);
             }}
+            QPushButton:hover {{
+                background-color: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 100);
+            }}
             QPushButton:pressed {{
-                background-color: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 80);
+                background-color: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 150);
             }}
             QPushButton:checked {{
                 background-color: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 255);
                 color: white;
             }}
             QPushButton:checked:hover {{
-                background-color: rgba({DELOITTE_GREEN.red() + 20}, {DELOITTE_GREEN.green() + 20}, {DELOITTE_GREEN.blue() + 20}, 255);
+                background-color: rgba({DELOITTE_GREEN.red() + 15}, {DELOITTE_GREEN.green() + 15}, {DELOITTE_GREEN.blue() + 15}, 255);
             }}
         """)
         
-        # Label below with transparent background
+        # Label below
         self.label = QLabel(label_text)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label_font = QFont("SF Pro Display", 11, QFont.Weight.Medium)
+        label_font = QFont("Open Sans Light", 10, QFont.Weight.Medium)
         self.label.setFont(label_font)
         self.label.setStyleSheet(f"""
             QLabel {{
-                color: rgba({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}, 140);
-                background: transparent;
-                border: none;
+                color: rgba({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}, 200);
             }}
         """)
         
         layout.addWidget(self.icon_btn, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.label, 0, Qt.AlignmentFlag.AlignCenter)
         self.setLayout(layout)
-        
-        # Ensure container has absolutely no background
-        self.setStyleSheet("""
-            AppleButton {
-                background: transparent;
-                border: none;
-            }
-        """)
         
         # Connect signals
         self.icon_btn.clicked.connect(self.clicked.emit)
@@ -681,58 +644,190 @@ class AppleButton(QPushButton):
     def setText(self, text):
         self.label.setText(text)
 
-class PremiumChatDisplay(QTextEdit):
-    """Executive-grade chat interface"""
+
+class FuturisticChatDisplay(QWidget):
+    """Futuristic chat interface with typing animation and limited messages"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setReadOnly(True)
+        self.setMinimumSize(400, 250)  # Reduced height since fewer messages
+        self.messages = []  # Store last 3 messages
+        self.max_messages = 3  # Changed from 5 to 3
+        self.typing_speed = 80  # milliseconds per character
         
-        font = QFont("Open Sans Light", 12)
-        font.setStyleHint(QFont.StyleHint.System)
-        self.setFont(font)
+        # Create layout
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)  # Remove all margins
+        layout.setSpacing(20)  # Increased spacing for bigger text
         
-        # Professional shadow
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(0, 4)
-        self.setGraphicsEffect(shadow)
+        # Message containers (newest first)
+        self.message_labels = []
+        for i in range(self.max_messages):
+            label = QLabel()
+            label.setWordWrap(True)
+            label.setAlignment(Qt.AlignmentFlag.AlignTop)
+            label.setStyleSheet("""
+                QLabel {
+                    background: transparent;
+                    border: none;
+                    padding: 0px;
+                    color: rgba(134, 188, 37, 255);
+                    font-family: 'Courier New', 'Monaco', monospace;
+                    font-size: 16px;
+                    font-weight: bold;
+                    line-height: 1.5;
+                }
+            """)
+            self.message_labels.append(label)
+            layout.addWidget(label)
         
-        self.setStyleSheet(f"""
-            QTextEdit {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba({DELOITTE_BLACK.red()}, {DELOITTE_BLACK.green()}, {DELOITTE_BLACK.blue()}, 250), 
-                    stop:0.3 rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 250),
-                    stop:1 rgba({DELOITTE_BLACK.red()}, {DELOITTE_BLACK.green()}, {DELOITTE_BLACK.blue()}, 250));
-                border: 2px solid rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 120);
-                border-radius: 15px;
-                color: rgba({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}, 255);
-                padding: 20px;
-                selection-background-color: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 100);
-                line-height: 1.4;
-            }}
-            QScrollBar:vertical {{
-                background: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 200);
-                border: 1px solid rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 80);
-                border-radius: 8px;
-                width: 16px;
-                margin: 2px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 150),
-                    stop:1 rgba({DELOITTE_DARK_GREEN.red()}, {DELOITTE_DARK_GREEN.green()}, {DELOITTE_DARK_GREEN.blue()}, 150));
-                border-radius: 7px;
-                min-height: 25px;
-                margin: 1px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 200);
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
+        layout.addStretch()  # Push messages to top
+        self.setLayout(layout)
+        
+        # Completely transparent background, no frame
+        self.setStyleSheet("""
+            FuturisticChatDisplay {
+                background: transparent;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
         """)
+        
+        # Typing animation timer
+        self.typing_timer = QTimer()
+        self.typing_timer.timeout.connect(self._continue_typing)
+        self.current_typing = None
+        
+    def add_message(self, sender: str, message: str):
+        """Add new message and trigger typing animation"""
+        timestamp = time.strftime("%H:%M:%S")
+        
+        # Create formatted message with green colors
+        if sender == "T.A.R.S":
+            color = "rgba(0, 255, 0, 255)"  # Bright green
+            prefix = f"[{timestamp}] T.A.R.S: "
+        elif sender == "EXECUTIVE":
+            color = "rgba(50, 255, 50, 220)"  # Slightly different green
+            prefix = f"[{timestamp}] YOU: "
+        else:
+            color = "rgba(134, 188, 37, 200)"  # Deloitte green
+            prefix = f"[{timestamp}] {sender}: "
+        
+        full_message = prefix + message
+        
+        # Add to messages list (newest first)
+        self.messages.insert(0, (full_message, color))
+        
+        # Keep only last 3 messages
+        if len(self.messages) > self.max_messages:
+            self.messages = self.messages[:self.max_messages]
+        
+        # Update display
+        self._update_display()
+        
+    def _update_display(self):
+        """Update all message labels"""
+        # Clear all labels first
+        for label in self.message_labels:
+            label.setText("")
+        
+        # Set static messages (all except the newest)
+        for i in range(1, len(self.messages)):
+            if i < len(self.message_labels):
+                message_text, color = self.messages[i]
+                self.message_labels[i].setStyleSheet(f"""
+                    QLabel {{
+                        background: transparent;
+                        border: none;
+                        padding: 0px;
+                        color: {color};
+                        font-family: 'Courier New', 'Monaco', monospace;
+                        font-size: 16px;
+                        font-weight: bold;
+                        line-height: 1.5;
+                    }}
+                """)
+                self.message_labels[i].setText(message_text)
+        
+        # Start typing animation for newest message
+        if self.messages:
+            self._start_typing_animation(0)
+    
+    def _start_typing_animation(self, label_index):
+        """Start typing animation for specified message"""
+        if label_index >= len(self.messages) or label_index >= len(self.message_labels):
+            return
+            
+        message_text, color = self.messages[label_index]
+        
+        # Setup typing animation
+        self.current_typing = {
+            'label_index': label_index,
+            'full_text': message_text,
+            'current_text': '',
+            'char_index': 0,
+            'color': color
+        }
+        
+        # Start animation
+        self.typing_timer.start(self.typing_speed)
+    
+    def _continue_typing(self):
+        """Continue typing animation"""
+        if not self.current_typing:
+            self.typing_timer.stop()
+            return
+        
+        typing = self.current_typing
+        
+        # Add next character
+        if typing['char_index'] < len(typing['full_text']):
+            typing['current_text'] += typing['full_text'][typing['char_index']]
+            typing['char_index'] += 1
+            
+            # Update label
+            label = self.message_labels[typing['label_index']]
+            label.setStyleSheet(f"""
+                QLabel {{
+                    background: transparent;
+                    border: none;
+                    padding: 0px;
+                    color: {typing['color']};
+                    font-family: 'Courier New', 'Monaco', monospace;
+                    font-size: 16px;
+                    font-weight: bold;
+                    line-height: 1.5;
+                }}
+            """)
+            
+            # Add blinking cursor
+            display_text = typing['current_text'] + "_"
+            label.setText(display_text)
+        else:
+            # Typing complete, remove cursor
+            label = self.message_labels[typing['label_index']]
+            label.setText(typing['full_text'])
+            
+            # Stop animation
+            self.typing_timer.stop()
+            self.current_typing = None
+    
+    def append(self, html_message):
+        """Compatibility method for existing code"""
+        # Extract plain text from HTML (simple approach)
+        import re
+        plain_text = re.sub('<[^<]+?>', '', html_message)
+        plain_text = re.sub(r'\s+', ' ', plain_text).strip()
+        
+        # Determine sender from text
+        if "T.A.R.S" in plain_text:
+            sender = "T.A.R.S"
+            message = plain_text.split(":", 1)[-1].strip()
+        else:
+            sender = "SYSTEM"
+            message = plain_text
+            
+        self.add_message(sender, message)
 
 class ExecutiveInput(QLineEdit):
     """Premium executive input field"""
@@ -876,16 +971,16 @@ class PremiumTarsUI(QWidget):
         controls_title.setStyleSheet(f"color: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 255); padding: 15px;")
         
         # Apple style round buttons
-        self.face_id_btn = AppleButton("⊙", "Face ID")  # Circle with center dot
+        self.face_id_btn = AppleButton("👁", "Face ID")
         self.face_id_btn.setCheckable(True)
         self.face_id_btn.clicked.connect(self.toggle_face_identification)
         
-        self.voice_command_btn = AppleButton("●", "Voice")  # Solid circle
+        self.voice_command_btn = AppleButton("🎙", "Voice")
         self.voice_command_btn.setCheckable(True)
         self.voice_command_btn.setChecked(True)  # Wake words always active
         self.voice_command_btn.clicked.connect(self.toggle_wake_word_system)
         
-        self.background_remove_btn = AppleButton("◐", "Portrait")  # Half circle
+        self.background_remove_btn = AppleButton("🎭", "Portrait")
         self.background_remove_btn.setCheckable(True)
         self.background_remove_btn.clicked.connect(self.toggle_background_removal)
         
@@ -928,7 +1023,7 @@ class PremiumTarsUI(QWidget):
         chat_title.setFont(QFont("Open Sans Light", 16, QFont.Weight.DemiBold))
         chat_title.setStyleSheet(f"color: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 255); padding: 15px;")
         
-        self.executive_chat = PremiumChatDisplay()
+        self.executive_chat = FuturisticChatDisplay()
         self.executive_chat.append(f"<div style='color: rgb({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}); font-weight: bold; font-size: 14px;'>T.A.R.S EXECUTIVE SYSTEM:</div><div style='margin-top: 8px; color: rgb({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}); line-height: 1.5;'>All systems operational. Deloitte Executive AI ready for engagement.</div>")
         
         self.command_input = ExecutiveInput()
@@ -1282,23 +1377,9 @@ class PremiumTarsUI(QWidget):
         threading.Thread(target=self._executive_ai_processing, args=(command_text,), daemon=True).start()
 
     def append_executive_message(self, sender: str, message: str):
-        timestamp = time.strftime("%H:%M:%S")
-        
-        if sender == "T.A.R.S":
-            color = f"rgb({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()})"
-        elif sender == "EXECUTIVE":
-            color = f"rgb({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()})"
-        else:
-            color = f"rgb({DELOITTE_SILVER.red()}, {DELOITTE_SILVER.green()}, {DELOITTE_SILVER.blue()})"
-        
-        formatted_message = f"""
-        <div style='margin-bottom: 15px; padding: 12px; border-left: 3px solid rgb({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}); background-color: rgba({DELOITTE_CHARCOAL.red()}, {DELOITTE_CHARCOAL.green()}, {DELOITTE_CHARCOAL.blue()}, 50);'>
-            <div style='color: rgb({DELOITTE_SILVER.red()}, {DELOITTE_SILVER.green()}, {DELOITTE_SILVER.blue()}); font-size: 11px; margin-bottom: 5px;'>[{timestamp}]</div>
-            <div style='color: {color}; font-weight: bold; font-size: 13px; margin-bottom: 5px;'>{sender}:</div>
-            <div style='color: rgb({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}); line-height: 1.5;'>{message}</div>
-        </div>
-        """
-        self.executive_chat.append(formatted_message)
+        """Add message to futuristic chat display"""
+        self.executive_chat.add_message(sender, message)
+
 
     def _executive_ai_processing(self, command_text: str):
         try:
