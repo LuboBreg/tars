@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QTimer, QRect, QPropertyAnimation, QEasingCurve, 
 
 from .face.base import FaceProvider, FaceResult
 from .face.azure import AzureFaceProvider
-from .face.incoresoft import IncoresoftFaceProvider
+# from .face.incoresoft import IncoresoftFaceProvider
 from .chat.azure_openai_client import ChatClient
 from .voice.azure_speech import Speech
 from PySide6.QtGui import QFontDatabase
@@ -29,6 +29,7 @@ from .face.face_recognition import FaceRecognitionManager, FaceRecognitionUIHelp
 # Import Audio/Voice Module
 from .voice.audio_voice import AudioManager, create_audio_system_callback
 from .constants import DELOITTE_GREEN, DELOITTE_BLACK, DELOITTE_DARK_GREEN, DELOITTE_CHARCOAL, DELOITTE_CHARCOAL, DELOITTE_SILVER, DELOITTE_WHITE
+
 
 # Deloitte Brand Colors - These should be moved to a constants.py file
 #DELOITTE_GREEN = QColor(134, 188, 37)      # #86BC25 - Deloitte signature green
@@ -215,12 +216,17 @@ class PremiumTarsUI(QWidget):
         self.chat = chat or ChatClient()
         self.speech = speech or Speech()
         
-        provider_name = os.getenv("TARS_FACE_PROVIDER", "azure").lower()
+        # In initialize_systems method, replace the provider selection with:
+        provider_name = os.getenv("TARS_FACE_PROVIDER", "opencv").lower()  # Default to deepface
         if provider is None:
-            if provider_name == "azure":
+            if provider_name == "opencv":
+                from .face.deepface_provider import DeepFaceProvider
+                provider = DeepFaceProvider() 
+            elif provider_name == "local":
+                from .face.local import LocalFaceProvider
+                provider = LocalFaceProvider()
+            elif provider_name == "azure":
                 provider = AzureFaceProvider()
-            elif provider_name == "incoresoft":
-                provider = IncoresoftFaceProvider()
             else:
                 raise SystemExit(f"Unknown TARS_FACE_PROVIDER: {provider_name}")
         self.provider = provider
