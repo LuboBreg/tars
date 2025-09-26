@@ -1,11 +1,15 @@
 # TARS-UI (Azure edition, macOS)
 
+
+
 TARS-inspired UI with:
 - **Azure OpenAI** for chat (Assistants-style minimal wrapper)
 - **Azure Speech** for **voice in/out** (push-to-talk mic capture + TTS to speakers)
 - **Face recognition** provider (default: **Azure Face**; optional: Incoresoft VEZHA® REST adapter)
 
 > Fan-made UI inspired by *Interstellar*'s TARS (not affiliated).
+
+## Python 3.10 was used  to develop this tool 
 
 ## Install
 ```bash
@@ -28,6 +32,7 @@ AZURE_SPEECH_REGION=your-region
 # Face (default = Azure Face; set keys if used)
 AZURE_FACE_ENDPOINT=https://<region>.api.cognitive.microsoft.com
 AZURE_FACE_KEY=your-azure-face-key
+TARS_FACE_PROVIDER=opencv
 ```
 
 ## Run
