@@ -117,8 +117,9 @@ class PremiumTarsUI(QWidget):
         # Apple style round buttons
         self.face_id_btn = AppleButton("⊙", "Face ID")  # Circle with center dot
         self.face_id_btn.setCheckable(True)
+        self.face_id_btn.setChecked(True)
         self.face_id_btn.clicked.connect(self.toggle_face_identification)
-        
+
         self.voice_command_btn = AppleButton("●", "Voice")  # Solid circle
         self.voice_command_btn.setCheckable(True)
         self.voice_command_btn.setChecked(True)  # Wake words always active
@@ -161,6 +162,11 @@ class PremiumTarsUI(QWidget):
         self.portrait_style_layout.addWidget(self.bw_btn)
         self.portrait_style_layout.addWidget(self.contrast_btn)
         
+        # Toggle for auto voice
+        self.auto_voice_btn = AppleButton("🗣", "Auto Voice")
+        self.auto_voice_btn.setCheckable(True)
+        self.auto_voice_btn.setChecked(True)  # Default enabled
+
         # Chat section
         chat_title = QLabel("EXECUTIVE COMMUNICATION")
         chat_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -258,15 +264,76 @@ class PremiumTarsUI(QWidget):
                         style_info['color'], style_info.get('success', False)
                     )
                     self.identity_panel.setStyleSheet(stylesheet)
-                else:
-                    # Use default style
-                    default_style = FaceRecognitionUIHelper.create_default_identity_panel_style()
-                    self.identity_panel.setStyleSheet(default_style)
                 self.identity_panel.setText(text)
+                
+                # Trigger voice conversation when face is identified
+                if "EXECUTIVE IDENTIFIED" in text.upper() or "IDENTIFIED" in text.upper():
+                    self._trigger_voice_greeting()
+                    
             elif action == 'add_message':
                 sender, message = args
                 self.append_executive_message(sender, message)
         return face_callback
+    
+    def _trigger_voice_greeting(self):
+        """Trigger voice conversation when face is detected"""
+        # Check if auto voice is enabled
+        if hasattr(self, 'auto_voice_btn') and not self.auto_voice_btn.isChecked():
+            return
+
+        # Avoid multiple rapid triggers
+        current_time = time.time()
+        if hasattr(self, '_last_voice_trigger'):
+            if current_time - self._last_voice_trigger < 30:  # Wait 30 seconds between triggers
+                return
+        
+        self._last_voice_trigger = current_time
+        
+        # Start voice conversation
+        self.append_executive_message("SYSTEM", "Executive detected - initiating voice conversation...")
+        
+        # Use your existing audio manager to start voice chat
+        if hasattr(self, 'audio_manager'):
+            threading.Thread(target=self._auto_voice_conversation, daemon=True).start()
+        else:
+            # Fallback to direct speech processing
+            threading.Thread(target=self._process_auto_voice_chat, daemon=True).start()
+
+    def _auto_voice_conversation(self):
+        """Automatically start voice conversation when face is detected"""
+        try:
+            # Give a greeting first
+            greeting_messages = [
+                "Hello! I detected your presence. How can I assist you today?",
+                "Good to see you! What can I help you with?",
+                "Welcome! I'm ready to assist. What would you like to discuss?"
+            ]
+            
+            greeting = np.random.choice(greeting_messages)
+            self.append_executive_message("T.A.R.S", greeting)
+            
+            # Speak the greeting
+            try:
+                self.speech.speak(greeting)
+            except:
+                pass
+            
+            # Wait a moment, then listen for response
+            time.sleep(2)
+            self.append_executive_message("SYSTEM", "Listening for your response...")
+            
+            # Listen for user response
+            voice_input = self.speech.recognize_once(timeout=15).strip()
+            
+            if voice_input:
+                # Process the voice input through your existing chat system
+                self.command_input.setText(voice_input)
+                self.process_command()
+            else:
+                self.append_executive_message("SYSTEM", "No voice input detected - voice conversation ended")
+                
+        except Exception as e:
+            self.append_executive_message("SYSTEM", f"Auto voice conversation error: {e}")
 
     def setup_timers_and_threads(self):
         # High-performance video processing
@@ -284,13 +351,25 @@ class PremiumTarsUI(QWidget):
         
         # Start continuous wake word listening
         self.audio_manager.start_wake_words()
+    
+        # Start face recognition by default
+        if hasattr(self, 'face_manager'):
+            self.face_manager.start_recognition()
+            self.identity_panel.setText("FACE ID: SCANNING...")
+            self.append_executive_message("SYSTEM", "Face identification service activated automatically")
 
     def toggle_face_identification(self):
         """Toggle face identification service on/off"""
         if self.face_id_btn.isChecked():
-            self.face_manager.start_recognition()
+            if hasattr(self, 'face_manager'):
+                self.face_manager.start_recognition()
+                self.append_executive_message("SYSTEM", "Face identification service activated")
+                self.identity_panel.setText("FACE ID: SCANNING...")
         else:
-            self.face_manager.stop_recognition()
+            if hasattr(self, 'face_manager'):
+                self.face_manager.stop_recognition()
+                self.append_executive_message("SYSTEM", "Face identification service deactivated")
+                self.identity_panel.setText("FACE ID: STANDBY")
 
     def toggle_background_removal(self):
         """Toggle background removal on/off"""
