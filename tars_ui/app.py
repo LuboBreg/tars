@@ -324,7 +324,7 @@ class PremiumTarsUI(QWidget):
             self.append_executive_message("SYSTEM", "Listening for your response...")
             
             # Listen for user response
-            voice_input = self.speech.recognize_once(timeout=15).strip()
+            voice_input = self.speech.recognize_once().strip()
             
             if voice_input:
                 # Process the voice input through your existing chat system
