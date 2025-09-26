@@ -32,3 +32,6 @@ tars-venv-310/
 
 # Environment variables
 .env
+*.pth
+*.pkl
+*.h5
