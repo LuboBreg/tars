@@ -25,9 +25,9 @@ class FaceResult:
         self.identity = identity
         self.confidence = confidence
         self.meta = meta or {}
-        
+       
         # New demographic and emotional attributes
-        self.age = age
+        self.age = age - 7
         self.gender = gender
         self.emotions = emotions or {}
 

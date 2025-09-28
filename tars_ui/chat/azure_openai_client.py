@@ -27,6 +27,8 @@ class ChatClient:
         resp = self.client.chat.completions.create(  # Fixed: correct method name
             model=self.deployment,
             messages=messages,
-            temperature=0.3
+            temperature=0.3,
+            max_tokens=30,  # Limit response length
+            top_p=0.9       
         )
         return resp.choices[0].message.content

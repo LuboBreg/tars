@@ -1,4 +1,19 @@
-import os, sys, time, threading
+# Add this to the top of your main app file (before any imports)
+import multiprocessing
+import os
+import sys
+
+# Prevent multiprocessing conflicts
+if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn', force=True)
+
+# Limit TensorFlow resources to prevent conflicts
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TF_NUM_INTEROP_THREADS'] = '1'
+os.environ['TF_NUM_INTRAOP_THREADS'] = '1'
+
+import time, threading
 import numpy as np, cv2
 from typing import Optional
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QLineEdit, 
@@ -9,7 +24,6 @@ from PySide6.QtCore import Qt, QTimer, QRect, QPropertyAnimation, QEasingCurve, 
 
 from .face.base import FaceProvider, FaceResult
 from .face.azure import AzureFaceProvider
-# from .face.incoresoft import IncoresoftFaceProvider
 from .chat.azure_openai_client import ChatClient
 from .voice.azure_speech import Speech
 from PySide6.QtGui import QFontDatabase
@@ -31,21 +45,18 @@ from .voice.audio_voice import AudioManager, create_audio_system_callback
 from .constants import DELOITTE_GREEN, DELOITTE_BLACK, DELOITTE_DARK_GREEN, DELOITTE_CHARCOAL, DELOITTE_CHARCOAL, DELOITTE_SILVER, DELOITTE_WHITE
 
 
-# Deloitte Brand Colors - These should be moved to a constants.py file
-#DELOITTE_GREEN = QColor(134, 188, 37)      # #86BC25 - Deloitte signature green
-#DELOITTE_DARK_GREEN = QColor(100, 140, 28) # Darker green for depth
-#DELOITTE_BLACK = QColor(18, 20, 24)        # #121418 - Deep professional black
-#DELOITTE_CHARCOAL = QColor(32, 35, 42)     # #20232A - Charcoal for panels
-#DELOITTE_SILVER = QColor(168, 170, 173)    # #A8AAAD - Professional silver
-#ELOITTE_WHITE = QColor(247, 248, 249)     # #F7F8F9 - Clean white
-
-
 class PremiumTarsUI(QWidget):
     def __init__(self, provider: Optional[FaceProvider] = None, chat: Optional[ChatClient] = None, 
                  camera_index: int = 0, speech: Optional[Speech] = None):
         super().__init__()
         self.setWindowTitle("T.A.R.S - Deloitte Executive AI System")
         self.resize(1800, 1000)
+        
+        # Add cleanup tracking
+        self._cleanup_done = False
+        self._audio_initialized = False
+        self._threads_active = []
+        self._last_voice_trigger = 0
         
         # Professional executive theme
         self.setStyleSheet(f"""
@@ -115,17 +126,17 @@ class PremiumTarsUI(QWidget):
         controls_title.setStyleSheet(f"color: rgba({DELOITTE_GREEN.red()}, {DELOITTE_GREEN.green()}, {DELOITTE_GREEN.blue()}, 255); padding: 15px;")
         
         # Apple style round buttons
-        self.face_id_btn = AppleButton("⊙", "Face ID")  # Circle with center dot
+        self.face_id_btn = AppleButton("⊙", "Face ID")
         self.face_id_btn.setCheckable(True)
         self.face_id_btn.setChecked(True)
         self.face_id_btn.clicked.connect(self.toggle_face_identification)
 
-        self.voice_command_btn = AppleButton("●", "Voice")  # Solid circle
+        self.voice_command_btn = AppleButton("●", "Voice")
         self.voice_command_btn.setCheckable(True)
-        self.voice_command_btn.setChecked(True)  # Wake words always active
+        self.voice_command_btn.setChecked(True)
         self.voice_command_btn.clicked.connect(self.toggle_wake_word_system)
         
-        self.background_remove_btn = AppleButton("◐", "Portrait")  # Half circle
+        self.background_remove_btn = AppleButton("◐", "Portrait")
         self.background_remove_btn.setCheckable(True)
         self.background_remove_btn.clicked.connect(self.toggle_background_removal)
         
@@ -165,7 +176,7 @@ class PremiumTarsUI(QWidget):
         # Toggle for auto voice
         self.auto_voice_btn = AppleButton("🗣", "Auto Voice")
         self.auto_voice_btn.setCheckable(True)
-        self.auto_voice_btn.setChecked(True)  # Default enabled
+        self.auto_voice_btn.setChecked(True)
 
         # Chat section
         chat_title = QLabel("EXECUTIVE COMMUNICATION")
@@ -192,6 +203,7 @@ class PremiumTarsUI(QWidget):
         right_layout.addWidget(controls_title)
         right_layout.addLayout(buttons_layout)
         right_layout.addLayout(self.portrait_style_layout)
+        right_layout.addWidget(self.auto_voice_btn)
         right_layout.addSpacing(20)
         right_layout.addWidget(chat_title)
         right_layout.addWidget(self.executive_chat, 1)
@@ -200,8 +212,8 @@ class PremiumTarsUI(QWidget):
         # Main layout - 2/3 left, 1/3 right
         main_content_layout = QHBoxLayout()
         main_content_layout.setSpacing(30)
-        main_content_layout.addLayout(video_layout, 2)  # 2/3 width
-        main_content_layout.addLayout(right_layout, 1)  # 1/3 width
+        main_content_layout.addLayout(video_layout, 2)
+        main_content_layout.addLayout(right_layout, 1)
         
         # Final assembly
         main_layout = QVBoxLayout()
@@ -222,8 +234,8 @@ class PremiumTarsUI(QWidget):
         self.chat = chat or ChatClient()
         self.speech = speech or Speech()
         
-        # In initialize_systems method, replace the provider selection with:
-        provider_name = os.getenv("TARS_FACE_PROVIDER", "opencv").lower()  # Default to deepface
+        # Provider selection
+        provider_name = os.getenv("TARS_FACE_PROVIDER", "opencv").lower()
         if provider is None:
             if provider_name == "opencv":
                 from .face.deepface_provider import DeepFaceProvider
@@ -246,13 +258,25 @@ class PremiumTarsUI(QWidget):
         self.background_removal_active = False
         self.background_remover = BackgroundRemover()
         
-        # Initialize audio system with callback
-        audio_callback = create_audio_system_callback(self)
-        self.audio_manager = AudioManager(self.speech, self.chat, audio_callback)
+        # Initialize audio system with proper error handling
+        try:
+            audio_callback = create_audio_system_callback(self)
+            self.audio_manager = AudioManager(self.speech, self.chat, audio_callback)
+            self._audio_initialized = True
+            print("Audio system initialized successfully")
+        except Exception as e:
+            print(f"Audio system initialization failed: {e}")
+            self.audio_manager = None
+            self._audio_initialized = False
         
-        # Initialize face recognition with callback
-        face_callback = self._create_face_recognition_callback()
-        self.face_manager = FaceRecognitionManager(self.provider, face_callback)
+        # Initialize face recognition with safer threading
+        try:
+            face_callback = self._create_face_recognition_callback()
+            self.face_manager = FaceRecognitionManager(self.provider, face_callback)
+            print("Face recognition initialized successfully")
+        except Exception as e:
+            print(f"Face recognition initialization failed: {e}")
+            self.face_manager = None
 
     def _create_face_recognition_callback(self):
         """Create callback for face recognition system"""
@@ -276,100 +300,76 @@ class PremiumTarsUI(QWidget):
         return face_callback
     
     def _trigger_voice_greeting(self):
-        """Trigger voice conversation when face is detected"""
-        # Check if auto voice is enabled
-        if hasattr(self, 'auto_voice_btn') and not self.auto_voice_btn.isChecked():
+        """Safer voice greeting trigger"""
+        if not hasattr(self, 'auto_voice_btn') or not self.auto_voice_btn.isChecked():
+            return
+        
+        if not self._audio_initialized or not self.audio_manager:
             return
 
         # Avoid multiple rapid triggers
         current_time = time.time()
-        if hasattr(self, '_last_voice_trigger'):
-            if current_time - self._last_voice_trigger < 30:  # Wait 30 seconds between triggers
-                return
+        if current_time - self._last_voice_trigger < 30:
+            return
         
         self._last_voice_trigger = current_time
-        
-        # Start voice conversation
-        self.append_executive_message("SYSTEM", "Executive detected - initiating voice conversation...")
-        
-        # Use your existing audio manager to start voice chat
-        if hasattr(self, 'audio_manager'):
-            threading.Thread(target=self._auto_voice_conversation, daemon=True).start()
-        else:
-            # Fallback to direct speech processing
-            threading.Thread(target=self._process_auto_voice_chat, daemon=True).start()
 
-    def _auto_voice_conversation(self):
-        """Automatically start voice conversation when face is detected"""
         try:
-            # Give a greeting first
-            greeting_messages = [
-                "Salam! I can see you! Do you have a questions about Deloitte?",
-                "Good to see you! What can I help you with?",
-                "Welcome! I'm ready to assist. What would you like to discuss?"
-            ]
-            
-            greeting = np.random.choice(greeting_messages)
-            self.append_executive_message("T.A.R.S", greeting)
-            
-            # Speak the greeting
-            try:
-                self.speech.speak(greeting)
-            except:
-                pass
-            
-            # Wait a moment, then listen for response
-            time.sleep(2)
-            self.append_executive_message("SYSTEM", "Listening for your response...")
-            
-            # Listen for user response
-            voice_input = self.speech.recognize_once().strip()
-            
-            if voice_input:
-                # Process the voice input through your existing chat system
-                self.command_input.setText(voice_input)
-                self.process_command()
-            else:
-                self.append_executive_message("SYSTEM", "No voice input detected - voice conversation ended")
-                
+            self.append_executive_message("SYSTEM", "Executive detected - initiating voice conversation...")
+            self.audio_manager.trigger_auto_voice_greeting()
         except Exception as e:
-            self.append_executive_message("SYSTEM", f"Auto voice conversation error: {e}")
+            print(f"Voice greeting trigger failed: {e}")
+            self.append_executive_message("SYSTEM", f"Voice greeting error: {e}")
 
     def setup_timers_and_threads(self):
         # High-performance video processing
         self.video_timer = QTimer()
         self.video_timer.timeout.connect(self.update_visual_intelligence)
-        self.video_timer.start(30)  # 33 FPS for premium experience
+        self.video_timer.start(30)
         
         # Hexagon glow animation
         self.glow_timer = QTimer()
         self.glow_timer.timeout.connect(self.animate_hexagon_glow)
-        self.glow_timer.start(50)  # 20 FPS for ambient glow
+        self.glow_timer.start(50)
         
         # Frame counter for face recognition optimization
         self._frame_counter = 0
         
-        # Start continuous wake word listening
-        self.audio_manager.start_wake_words()
-    
-        # Start face recognition by default
-        if hasattr(self, 'face_manager'):
-            self.face_manager.start_recognition()
-            self.identity_panel.setText("FACE ID: SCANNING...")
-            self.append_executive_message("SYSTEM", "Face identification service activated automatically")
+        # Start audio system safely
+        if self._audio_initialized and self.audio_manager:
+            try:
+                self.audio_manager.start_wake_words()
+                print("Wake word system started")
+            except Exception as e:
+                print(f"Failed to start wake word system: {e}")
+        
+        # Start face recognition safely
+        if hasattr(self, 'face_manager') and self.face_manager:
+            try:
+                self.face_manager.start_recognition()
+                self.identity_panel.setText("FACE ID: SCANNING...")
+                self.append_executive_message("SYSTEM", "Face identification service activated")
+            except Exception as e:
+                print(f"Failed to start face recognition: {e}")
 
     def toggle_face_identification(self):
-        """Toggle face identification service on/off"""
-        if self.face_id_btn.isChecked():
-            if hasattr(self, 'face_manager'):
+        """Safer face ID toggle"""
+        if not hasattr(self, 'face_manager') or not self.face_manager:
+            self.append_executive_message("SYSTEM", "Face recognition system not available")
+            return
+        
+        try:
+            if self.face_id_btn.isChecked():
                 self.face_manager.start_recognition()
                 self.append_executive_message("SYSTEM", "Face identification service activated")
                 self.identity_panel.setText("FACE ID: SCANNING...")
-        else:
-            if hasattr(self, 'face_manager'):
+            else:
                 self.face_manager.stop_recognition()
                 self.append_executive_message("SYSTEM", "Face identification service deactivated")
                 self.identity_panel.setText("FACE ID: STANDBY")
+        except Exception as e:
+            print(f"Face ID toggle error: {e}")
+            self.append_executive_message("SYSTEM", f"Face ID error: {e}")
 
     def toggle_background_removal(self):
         """Toggle background removal on/off"""
@@ -378,28 +378,23 @@ class PremiumTarsUI(QWidget):
         if self.background_removal_active:
             self.append_executive_message("SYSTEM", "Portrait mode activated - iPhone-style face isolation")
             self.background_remover.reset()
-            # Show portrait style options
             self.natural_btn.setVisible(True)
             self.bw_btn.setVisible(True)
             self.contrast_btn.setVisible(True)
         else:
             self.append_executive_message("SYSTEM", "Portrait mode deactivated")
-            # Hide portrait style options
             self.natural_btn.setVisible(False)
             self.bw_btn.setVisible(False)
             self.contrast_btn.setVisible(False)
 
     def set_portrait_style(self, style):
         """Set iPhone-style portrait mode effect"""
-        # Update button states
         self.natural_btn.setChecked(style == "natural")
         self.bw_btn.setChecked(style == "black_white")
         self.contrast_btn.setChecked(style == "high_contrast")
         
-        # Update background remover style
         self.background_remover.set_portrait_style(style)
         
-        # Notify user
         style_names = {
             "natural": "Natural grayish-white portrait mode",
             "black_white": "Black & White portrait mode (iPhone style)",
@@ -408,12 +403,22 @@ class PremiumTarsUI(QWidget):
         self.append_executive_message("SYSTEM", f"Portrait style: {style_names.get(style, style)}")
 
     def toggle_wake_word_system(self):
-        """Toggle wake word listening system on/off"""
-        if self.voice_command_btn.isChecked():
-            if not self.audio_manager.is_wake_word_active():
-                self.audio_manager.start_wake_words()
-        else:
-            self.audio_manager.stop_wake_words()
+        """Safer wake word toggle"""
+        if not self._audio_initialized or not self.audio_manager:
+            self.append_executive_message("SYSTEM", "Audio system not available")
+            return
+        
+        try:
+            if self.voice_command_btn.isChecked():
+                if not self.audio_manager.is_wake_word_active():
+                    self.audio_manager.start_wake_words()
+                    self.append_executive_message("SYSTEM", "Wake word system activated")
+            else:
+                self.audio_manager.stop_wake_words()
+                self.append_executive_message("SYSTEM", "Wake word system deactivated")
+        except Exception as e:
+            print(f"Wake word toggle error: {e}")
+            self.append_executive_message("SYSTEM", f"Wake word error: {e}")
 
     def animate_hexagon_glow(self):
         self.video_display.advance_glow()
@@ -421,32 +426,43 @@ class PremiumTarsUI(QWidget):
     def update_visual_intelligence(self):
         ret, frame = self.cap.read()
         if ret:
-            # Resize for better performance (smaller processing size)
+            # Resize for better performance
             processed_frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
             
-            # Store original sized frame for face recognition (better quality)
+            # Store original sized frame for face recognition
             self._current_frame = cv2.resize(frame, (800, 600), interpolation=cv2.INTER_LANCZOS4)
             
             # Update face recognition manager with current frame
-            self.face_manager.update_frame(self._current_frame)
+            if hasattr(self, 'face_manager') and self.face_manager:
+                try:
+                    self.face_manager.update_frame(self._current_frame)
+                except Exception as e:
+                    if self._frame_counter % 100 == 0:
+                        print(f"Face recognition update error: {e}")
             
             # Apply background removal if active
             if self.background_removal_active:
-                # Process background removal on smaller frame for performance
-                bg_removed_frame = self.background_remover.remove_background(processed_frame)
-                
-                # Resize back to display size
-                display_frame = cv2.resize(bg_removed_frame, (800, 600), interpolation=cv2.INTER_LINEAR)
+                try:
+                    bg_removed_frame = self.background_remover.remove_background(processed_frame)
+                    display_frame = cv2.resize(bg_removed_frame, (800, 600), interpolation=cv2.INTER_LINEAR)
+                except Exception as e:
+                    if self._frame_counter % 100 == 0:
+                        print(f"Background removal error: {e}")
+                    display_frame = self._current_frame
             else:
                 display_frame = self._current_frame
             
             # Update display
-            self.video_display.set_frame(display_frame)
+            try:
+                self.video_display.set_frame(display_frame)
+            except Exception as e:
+                if self._frame_counter % 100 == 0:
+                    print(f"Video display error: {e}")
            
-            # Update frame counter
             self._frame_counter += 1
 
     def process_command(self):
+        """Safer command processing"""
         command_text = self.command_input.text().strip()
         if not command_text:
             return
@@ -454,8 +470,28 @@ class PremiumTarsUI(QWidget):
         self.append_executive_message("EXECUTIVE", command_text)
         self.command_input.clear()
         
-        # Process through audio manager for consistent handling
-        threading.Thread(target=self._executive_ai_processing, args=(command_text,), daemon=True).start()
+        # Use audio manager if available, otherwise fallback
+        if self._audio_initialized and self.audio_manager:
+            try:
+                self.audio_manager.process_voice_command(command_text)
+                return
+            except Exception as e:
+                print(f"Audio manager command processing failed: {e}")
+        
+        # Fallback to direct processing
+        self._safe_thread_start(self._executive_ai_processing, (command_text,))
+
+    def _safe_thread_start(self, target, args=(), daemon=True):
+        """Start threads safely with tracking"""
+        try:
+            thread = threading.Thread(target=target, args=args, daemon=daemon)
+            thread.start()
+            if not daemon:
+                self._threads_active.append(thread)
+            return thread
+        except Exception as e:
+            print(f"Failed to start thread: {e}")
+            return None
 
     def _executive_ai_processing(self, command_text: str):
         """Process AI command (kept for direct command processing)"""
@@ -481,7 +517,6 @@ class PremiumTarsUI(QWidget):
         
         self.append_executive_message("T.A.R.S", ai_response)
         
-        # Executive text-to-speech
         try:
             self.speech.speak(ai_response)
         except Exception:
@@ -506,6 +541,55 @@ class PremiumTarsUI(QWidget):
         """
         self.executive_chat.append(formatted_message)
 
+    def closeEvent(self, event):
+        """Proper cleanup on application close"""
+        if self._cleanup_done:
+            event.accept()
+            return
+        
+        print("Starting application cleanup...")
+        self._cleanup_done = True
+        
+        try:
+            if hasattr(self, 'video_timer'):
+                self.video_timer.stop()
+            if hasattr(self, 'glow_timer'):
+                self.glow_timer.stop()
+            
+            if self._audio_initialized and hasattr(self, 'audio_manager') and self.audio_manager:
+                try:
+                    self.audio_manager.end_current_conversation()
+                    self.audio_manager.stop_wake_words()
+                    print("Audio system stopped")
+                except Exception as e:
+                    print(f"Audio cleanup error: {e}")
+            
+            if hasattr(self, 'face_manager') and self.face_manager:
+                try:
+                    self.face_manager.stop_recognition()
+                    print("Face recognition stopped")
+                except Exception as e:
+                    print(f"Face recognition cleanup error: {e}")
+            
+            if hasattr(self, 'cap') and self.cap:
+                try:
+                    self.cap.release()
+                    print("Camera released")
+                except Exception as e:
+                    print(f"Camera cleanup error: {e}")
+            
+            for thread in self._threads_active:
+                if thread.is_alive():
+                    thread.join(timeout=1.0)
+            
+            print("Cleanup completed")
+            
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+        
+        time.sleep(0.5)
+        event.accept()
+
 
 # Create alias for backward compatibility
 TarsUI = PremiumTarsUI
@@ -514,7 +598,6 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("T.A.R.S Executive System")
     
-    # Set executive application style
     app.setStyleSheet(f"""
         QToolTip {{
             background-color: rgba({DELOITTE_BLACK.red()}, {DELOITTE_BLACK.green()}, {DELOITTE_BLACK.blue()}, 240);
@@ -526,7 +609,18 @@ def main():
         }}
     """)
     
-    ui = PremiumTarsUI(provider=None, chat=None, speech=None)
-    ui.show()
-    
-    sys.exit(app.exec()) 
+    try:
+        ui = PremiumTarsUI(provider=None, chat=None, speech=None)
+        ui.show()
+        
+        import atexit
+        atexit.register(lambda: print("Application exiting..."))
+        
+        sys.exit(app.exec())
+        
+    except Exception as e:
+        print(f"Application startup error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
