@@ -4,7 +4,8 @@ from typing import Optional
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QLineEdit, 
                               QPushButton, QHBoxLayout, QVBoxLayout, QFrame, QGraphicsDropShadowEffect,
                               QScrollArea, QSizePolicy)
-from PySide6.QtGui import QFont, QImage, QPixmap, QColor, QPalette, QPainter, QPen, QBrush, QLinearGradient, QPolygon, QRadialGradient
+from PySide6.QtGui import (QFont, QImage, QPixmap, QColor, QPalette, QPainter, QPen, 
+                          QBrush, QLinearGradient, QPolygon, QRadialGradient, QTextCursor)
 from PySide6.QtCore import Qt, QTimer, QRect, QPropertyAnimation, QEasingCurve, QPoint, QSize
 
 from .face.base import FaceProvider, FaceResult
@@ -504,7 +505,13 @@ class PremiumTarsUI(QWidget):
             <div style='color: rgb({DELOITTE_WHITE.red()}, {DELOITTE_WHITE.green()}, {DELOITTE_WHITE.blue()}); line-height: 1.5;'>{message}</div>
         </div>
         """
-        self.executive_chat.append(formatted_message)
+        try:
+            cursor = self.executive_chat.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            cursor.insertHtml(formatted_message)
+            self.executive_chat.moveCursor(QTextCursor.Start)
+        except Exception:
+            self.executive_chat.append(formatted_message)
 
 
 # Create alias for backward compatibility

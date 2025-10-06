@@ -91,7 +91,7 @@ class WakeWordManager:
         while self.active:
             try:
                 # Listen for wake words with shorter timeout
-                audio_input = self.speech.recognize_once(timeout=2).lower().strip()
+                audio_input = self.speech.recognize_once().lower().strip()
                 
                 if audio_input:
                     # Check for wake word matches
@@ -137,7 +137,7 @@ class WakeWordManager:
         """Process voice chat with longer listening time"""
         try:
             # Listen for longer command/question
-            voice_input = self.speech.recognize_once(timeout=10).strip()
+            voice_input = self.speech.recognize_once().strip()
             
             if voice_input:
                 self._ui_action('process_voice_command', voice_input)
