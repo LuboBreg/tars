@@ -5,25 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tars-ui-azure"
 version = "0.2.0"
-description = "Interstellar TARS-inspired UI for macOS with Azure OpenAI chat, Azure Speech (voice), and pluggable face recognition (Azure/ Incoresoft)"
+description = "Interstellar TARS-inspired UI for macOS with Azure OpenAI chat, Azure Speech (voice), and OpenCV"
 readme = "README.md"
 requires-python = ">=3.9,<3.11"
 license = "MIT"
-authors = [{name = "You", email = "you@example.com"}]
+authors = [{name = "Liubo Bregman", email = "liubomyrb@gmail.com"}]
 dependencies = [
-    "PySide6>=6.7",
-    "opencv-python>=4.9",
-    "numpy>=1.26",
-    "pillow>=10.2",
-    "requests>=2.31",
-    "python-dotenv>=1.0",
-    "openai",
-    "azure-cognitiveservices-speech>=1.37.0",
-    "azure-cognitiveservices-vision-face",
-    "msrest"
-
+"PySide6>=6.7",
+"opencv-python>=4.9",
+"numpy<=2.0",
+"pillow>=10.2",
+"requests>=2.31",
+"python-dotenv>=1.0",
+"openai",
+"azure-cognitiveservices-speech>=1.37.0",
+"azure-cognitiveservices-vision-face",
+"msrest",
+"Flask>=3.1",
+"flask-cors>=6.0",
+"gunicorn>=23.0",
+"deepface>=0.0.95",
+"retina-face>=0.0.17",
+"pandas>=2.3",
+"joblib>=1.5",
+"torch>=2.2",
+"torchvision>=0.17",
+"tensorflow>=2.16",
+"keras>=3.11"
 ]
-
 
 
 [project.scripts]

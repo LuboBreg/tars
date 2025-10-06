@@ -29,3 +29,13 @@ class Speech:
         audio_out = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
         synth = speechsdk.SpeechSynthesizer(speech_config=self.speech_config, audio_config=audio_out)
         _ = synth.speak_text_async(text).get()
+
+    def stop_speaking(self):
+        """Stop current speech synthesis"""
+        try:
+            # For Azure Speech SDK, you might need to implement this
+            # depending on your specific implementation
+            self.should_stop_speaking = True
+        except Exception:
+            pass
+

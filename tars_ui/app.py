@@ -304,7 +304,7 @@ class PremiumTarsUI(QWidget):
         try:
             # Give a greeting first
             greeting_messages = [
-                "Hello! I detected your presence. How can I assist you today?",
+                "Salam! I can see you! Do you have a questions about Deloitte?",
                 "Good to see you! What can I help you with?",
                 "Welcome! I'm ready to assist. What would you like to discuss?"
             ]
@@ -323,7 +323,7 @@ class PremiumTarsUI(QWidget):
             self.append_executive_message("SYSTEM", "Listening for your response...")
             
             # Listen for user response
-            voice_input = self.speech.recognize_once(timeout=15).strip()
+            voice_input = self.speech.recognize_once().strip()
             
             if voice_input:
                 # Process the voice input through your existing chat system
@@ -529,4 +529,4 @@ def main():
     ui = PremiumTarsUI(provider=None, chat=None, speech=None)
     ui.show()
     
-    sys.exit(app.exec())
+    sys.exit(app.exec()) 
